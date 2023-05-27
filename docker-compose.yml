@@ -1,0 +1,229 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:latest
+    restart: always
+    depends_on:
+      - fluentd
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - '5432:5432'
+    volumes:
+      - /Users/dsilvamarsh/git/tmp/postgres:/var/lib/postgresql/data
+    networks:
+      - bank-default-network
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: postgres
+    deploy: 
+      resources:
+        limits: 
+          cpus: '2'
+          memory: 150M 
+        reservations:
+          cpus: '1'
+          memory: 80M
+
+  
+  nginx-reverse-proxy:  
+    image: nginx:latest
+    restart: always
+    depends_on:
+      - fluentd
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx-reverse-proxy/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx-reverse-proxy/bank-services.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx-reverse-proxy:/usr/share/nginx/html
+    networks:
+     - bank-default-network
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: nginx 
+    deploy:
+      resources:
+        limits: 
+          cpus: '2'
+          memory: 50M 
+        reservations:
+          cpus: '1'
+          memory: 30M
+
+
+  prometheus:
+    image: prom/prometheus
+    restart: always
+    depends_on:
+      - fluentd
+    ports: 
+      - '9090:9090'
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml  
+    networks:
+      - bank-default-network
+    deploy:
+      resources:
+        limits: 
+          cpus: '2'
+          memory: 150M 
+        reservations:
+          cpus: '1'
+          memory: 50M
+
+
+  fluentd:
+    image: fluent/fluentd:latest
+    depends_on:
+      - elasticsearch
+    volumes:
+      - ./fluentd/fluent.conf:/fluentd/etc/fluent.conf
+    links:
+      - "elasticsearch"
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+    networks:
+      - bank-default-network
+    deploy:
+      resources:
+        limits: 
+          cpus: '2'
+          memory: 150M 
+        reservations:
+          cpus: '1'
+          memory: 50M
+
+  # grafana:
+  #   image: grafana/grafana-oss:latest
+  #   container_name: grafana
+  #   restart: always
+  #   ports:
+  #     - '3000:3000'
+  #   volumes:
+  #     - ../data/grafana:/var/lib/grafana
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=admin
+  #     - GF_SERVER_DOMAIN=localhost
+  #   networks:
+  #     - bank-default-network
+  #   deploy:
+  #     resources:
+  #       limits: 
+  #         cpus: '2'
+  #         memory: 150M 
+  #       reservations:
+  #         cpus: '1'
+  #         memory: 50M
+
+
+
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.13.1
+    container_name: elasticsearch
+    environment:
+      - "discovery.type=single-node"
+    expose:
+      - "9200"
+    ports:
+      - "9200:9200"
+    networks:
+      - bank-default-network
+    deploy:
+      resources:
+        limits: 
+          cpus: '2'
+          memory: 500M 
+        reservations:
+          cpus: '1'
+          memory: 200M
+
+  # kibana:
+  #   image: docker.elastic.co/kibana/kibana:7.13.1
+  #   links:
+  #     - "elasticsearch"
+  #   ports:
+  #     - "5601:5601"
+  #   networks:
+  #     - bank-default-network
+  #   deploy:
+  #     resources:
+  #       limits: 
+  #         cpus: '2'
+  #         memory: 500M 
+  #       reservations:
+  #         cpus: '1'
+  #         memory: 200M
+
+
+
+  com-bank-core-customer:
+    build: ../com-bank-core-customer
+    depends_on:
+      - db
+      - fluentd
+    ports:
+      - "8080"
+    volumes:
+      - /tmp/com-bank-core-customer:/tmp
+    networks:
+      - bank-default-network
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: customer
+    deploy:
+      mode: replicated
+      replicas: 2
+      resources:
+        limits: 
+          cpus: '2'
+          memory: 150M 
+        reservations:
+          cpus: '1'
+          memory: 50M
+
+
+  com-bank-core-currency:
+    build: ../com-bank-core-currency
+    depends_on:
+      - db
+      - fluentd
+    ports:
+      - "8080"
+    volumes:
+      - /tmp/com-bank-core-currency:/tmp
+    networks:
+      - bank-default-network
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: currency
+    deploy:
+      mode: replicated
+      replicas: 2
+      resources:
+        limits: 
+          cpus: '2'
+          memory: 150M 
+        reservations:
+          cpus: '1'
+          memory: 50M
+
+networks:
+  bank-default-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    driver: local
+
