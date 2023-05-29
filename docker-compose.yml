@@ -1,5 +1,32 @@
 version: "3.9"
 services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:21.1.1
+    restart: always
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+      - DB_VENDOR=POSTGRES
+      - DB_ADDR=postgres:5432
+      - DB_DATABASE=keycloak
+      - DB_USER=keycloak
+      - DB_SCHEMA=keycloak
+      - DB_PASSWORD=keycloak
+      - KEYCLOAK_USER=admin
+      - KEYCLOAK_PASSWORD=admin
+    ports:
+     - 8080:8080
+    networks:
+      - bank-default-network
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        fluentd-async: 'true'
+        tag: keycloak
+    command:
+     - start-dev
+
   db:
     image: postgres:latest
     restart: always
@@ -18,6 +45,7 @@ services:
       driver: "fluentd"
       options:
         fluentd-address: localhost:24224
+        fluentd-async: 'true'
         tag: postgres
     deploy: 
       resources:
@@ -46,6 +74,7 @@ services:
       driver: "fluentd"
       options:
         fluentd-address: localhost:24224
+        fluentd-async: 'true'
         tag: nginx 
     deploy:
       resources:
@@ -79,11 +108,14 @@ services:
 
 
   fluentd:
-    image: fluent/fluentd:latest
+    #build: ./fluentd
+    #image: fluent/fluentd:latest
+    image: govtechsg/fluentd-elasticsearch
     depends_on:
       - elasticsearch
     volumes:
       - ./fluentd/fluent.conf:/fluentd/etc/fluent.conf
+      - ./fluentd/entrypoint.sh:/bin/entrypoint.sh
     links:
       - "elasticsearch"
     ports:
@@ -100,27 +132,27 @@ services:
           cpus: '1'
           memory: 50M
 
-  # grafana:
-  #   image: grafana/grafana-oss:latest
-  #   container_name: grafana
-  #   restart: always
-  #   ports:
-  #     - '3000:3000'
-  #   volumes:
-  #     - ../data/grafana:/var/lib/grafana
-  #   environment:
-  #     - GF_SECURITY_ADMIN_PASSWORD=admin
-  #     - GF_SERVER_DOMAIN=localhost
-  #   networks:
-  #     - bank-default-network
-  #   deploy:
-  #     resources:
-  #       limits: 
-  #         cpus: '2'
-  #         memory: 150M 
-  #       reservations:
-  #         cpus: '1'
-  #         memory: 50M
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    restart: always
+    ports:
+      - '3000:3000'
+    volumes:
+      - ../data/grafana:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SERVER_DOMAIN=localhost
+    networks:
+      - bank-default-network
+    deploy:
+      resources:
+        limits: 
+          cpus: '2'
+          memory: 150M 
+        reservations:
+          cpus: '1'
+          memory: 50M
 
 
 
@@ -145,22 +177,22 @@ services:
           cpus: '1'
           memory: 200M
 
-  # kibana:
-  #   image: docker.elastic.co/kibana/kibana:7.13.1
-  #   links:
-  #     - "elasticsearch"
-  #   ports:
-  #     - "5601:5601"
-  #   networks:
-  #     - bank-default-network
-  #   deploy:
-  #     resources:
-  #       limits: 
-  #         cpus: '2'
-  #         memory: 500M 
-  #       reservations:
-  #         cpus: '1'
-  #         memory: 200M
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.13.1
+    links:
+      - "elasticsearch"
+    ports:
+      - "5601:5601"
+    networks:
+      - bank-default-network
+    deploy:
+      resources:
+        limits: 
+          cpus: '2'
+          memory: 500M 
+        reservations:
+          cpus: '1'
+          memory: 200M
 
 
 
@@ -179,6 +211,7 @@ services:
       driver: "fluentd"
       options:
         fluentd-address: localhost:24224
+        fluentd-async: 'true'
         tag: customer
     deploy:
       mode: replicated
@@ -207,6 +240,7 @@ services:
       driver: "fluentd"
       options:
         fluentd-address: localhost:24224
+        fluentd-async: 'true'
         tag: currency
     deploy:
       mode: replicated
